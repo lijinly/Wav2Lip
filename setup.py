@@ -1,6 +1,17 @@
 # setup.py
 from setuptools import setup, find_packages
 
+def read_requirements():
+    """Read requirements from requirements.txt file."""
+    with open("requirements.txt", "r") as fh:
+        requirements = []
+        for line in fh:
+            line = line.strip()
+            # Skip empty lines and comments
+            if line and not line.startswith("#"):
+                requirements.append(line)
+        return requirements
+
 setup(
     name="wav2lip",
     version="0.1.0",
@@ -10,17 +21,7 @@ setup(
     author="Rudrabha Mukhopadhyay et al.",
     url="https://github.com/Rudrabha/Wav2Lip",
     packages=find_packages(),
-    install_requires=[
-        "torch>=1.5.0",
-        "torchvision>=0.6.0",
-        "numpy>=1.18.0",
-        "opencv-python>=4.0.0",
-        "scipy>=1.4.0",
-        "tqdm>=4.45.0",
-        "librosa>=0.7.0",
-        "matplotlib>=3.1.0",
-        "Pillow>=6.0.0",
-    ],
+    install_requires=read_requirements(),  # Using parsed requirements
     python_requires=">=3.6",
     classifiers=[
         "Development Status :: 4 - Beta",
