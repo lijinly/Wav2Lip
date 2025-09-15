@@ -221,7 +221,7 @@ def main():
 		print('Extracting raw audio...')
 		with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as tmp_wav_audio:
 			wav_temp_file_path = tmp_wav_audio.name
-			command = 'ffmpeg -y -i {} -strict -2 {}'.format(args.audio, wav_temp_file_path)
+			command = 'ffmpeg -loglevel error -y -i {} -strict -2 {}'.format(args.audio, wav_temp_file_path)
 			subprocess.call(command, shell=True)
 			args.audio = wav_temp_file_path
 
@@ -281,7 +281,7 @@ def main():
 
 		out.release()
 
-		command = 'ffmpeg -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio,tmp_avi_video.name, args.outfile)
+		command = 'ffmpeg -loglevel error -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio,tmp_avi_video.name, args.outfile)
 		subprocess.call(command, shell=platform.system() != 'Windows')
 
 if __name__ == '__main__':
