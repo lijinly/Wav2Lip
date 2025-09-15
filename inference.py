@@ -1,6 +1,8 @@
 from os import listdir, path
+import tempfile
 import numpy as np
-import scipy, cv2, os, sys, argparse, audio
+import scipy, cv2, os, sys, argparse
+from . import audio  
 import json, subprocess, random, string
 from tqdm import tqdm
 from glob import glob
@@ -11,12 +13,12 @@ import platform
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
 
 parser.add_argument('--checkpoint_path', type=str, 
-					help='Name of saved checkpoint to load weights from', required=True)
+					help='Name of saved checkpoint to load weights from')
 
 parser.add_argument('--face', type=str, 
-					help='Filepath of video/image that contains faces to use', required=True)
+					help='Filepath of video/image that contains faces to use')
 parser.add_argument('--audio', type=str, 
-					help='Filepath of video/audio file to use as raw audio source', required=True)
+					help='Filepath of video/audio file to use as raw audio source')
 parser.add_argument('--outfile', type=str, help='Video path to save result. See default for an e.g.', 
 								default='results/result_voice.mp4')
 
@@ -53,8 +55,8 @@ parser.add_argument('--nosmooth', default=False, action='store_true',
 args = parser.parse_args()
 args.img_size = 96
 
-if os.path.isfile(args.face) and args.face.split('.')[1] in ['jpg', 'png', 'jpeg']:
-	args.static = True
+# if os.path.isfile(args.face) and args.face.split('.')[1] in ['jpg', 'png', 'jpeg']:
+# 	args.static = True
 
 def get_smoothened_boxes(boxes, T):
 	for i in range(len(boxes)):
@@ -214,15 +216,18 @@ def main():
 
 	print ("Number of frames available for inference: "+str(len(full_frames)))
 
+	wav_temp_file_path = None
 	if not args.audio.endswith('.wav'):
 		print('Extracting raw audio...')
-		command = 'ffmpeg -y -i {} -strict -2 {}'.format(args.audio, 'temp/temp.wav')
+		with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as tmp_wav_audio:
+			wav_temp_file_path = tmp_wav_audio.name
+			command = 'ffmpeg -y -i {} -strict -2 {}'.format(args.audio, wav_temp_file_path)
+			subprocess.call(command, shell=True)
+			args.audio = wav_temp_file_path
 
-		subprocess.call(command, shell=True)
-		args.audio = 'temp/temp.wav'
-
-	wav = audio.load_wav(args.audio, 16000)
-	mel = audio.melspectrogram(wav)
+			wav = audio.load_wav(args.audio, 16000)
+			mel = audio.melspectrogram(wav)
+   
 	print(mel.shape)
 
 	if np.isnan(mel.reshape(-1)).sum() > 0:
@@ -246,35 +251,38 @@ def main():
 	batch_size = args.wav2lip_batch_size
 	gen = datagen(full_frames.copy(), mel_chunks)
 
-	for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
-											total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
-		if i == 0:
-			model = load_model(args.checkpoint_path)
-			print ("Model loaded")
+	model = load_model(args.checkpoint_path)
+	print ("Model loaded")
 
-			frame_h, frame_w = full_frames[0].shape[:-1]
-			out = cv2.VideoWriter('temp/result.avi', 
-									cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
+	frame_h, frame_w = full_frames[0].shape[:-1]
+	
+	with tempfile.NamedTemporaryFile(suffix='.avi', delete=True) as tmp_avi_video:
+		out = cv2.VideoWriter(tmp_avi_video.name, 
+								cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
+   
+		for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
+												total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
+			
 
-		img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
-		mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
+			img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
+			mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
 
-		with torch.no_grad():
-			pred = model(mel_batch, img_batch)
+			with torch.no_grad():
+				pred = model(mel_batch, img_batch)
 
-		pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
-		
-		for p, f, c in zip(pred, frames, coords):
-			y1, y2, x1, x2 = c
-			p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
+			pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
+			
+			for p, f, c in zip(pred, frames, coords):
+				y1, y2, x1, x2 = c
+				p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
 
-			f[y1:y2, x1:x2] = p
-			out.write(f)
+				f[y1:y2, x1:x2] = p
+				out.write(f)
 
-	out.release()
+		out.release()
 
-	command = 'ffmpeg -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio, 'temp/result.avi', args.outfile)
-	subprocess.call(command, shell=platform.system() != 'Windows')
+		command = 'ffmpeg -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio,tmp_avi_video.name, args.outfile)
+		subprocess.call(command, shell=platform.system() != 'Windows')
 
 if __name__ == '__main__':
 	main()

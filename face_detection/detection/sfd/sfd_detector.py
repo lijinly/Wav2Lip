@@ -10,11 +10,13 @@ from .detect import *
 
 models_urls = {
     's3fd': 'https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth',
+    's3fd_fast': 'https://www.adrianbulat.com/downloads/python-fan/s3fd_fast-c1c7d7c5c.pth',
+    's3fd_local':os.path.join('Wav2Lip','checkpoints','s3fd.pth')
 }
 
 
 class SFDDetector(FaceDetector):
-    def __init__(self, device, path_to_detector=os.path.join(os.path.dirname(os.path.abspath(__file__)), 's3fd.pth'), verbose=False):
+    def __init__(self, device, path_to_detector=models_urls['s3fd_local'], verbose=False):
         super(SFDDetector, self).__init__(device, verbose)
 
         # Initialise the face detector
