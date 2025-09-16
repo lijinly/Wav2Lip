@@ -29,6 +29,7 @@ class SFDDetector(FaceDetector):
         self.face_detector.load_state_dict(model_weights)
         self.face_detector.to(device)
         self.face_detector.eval()
+        print(f'SFD detector loaded from {path_to_detector}')
 
     def detect_from_image(self, tensor_or_path):
         image = self.tensor_or_path_to_ndarray(tensor_or_path)
